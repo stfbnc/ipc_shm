@@ -8,12 +8,25 @@
 #include <pthread.h>
 
 #define NAME "/cpshm"
+#define N 1000
 
 typedef struct shm
 {
     pthread_mutex_t mtx;
-    int cnt;
+    int error;
+    int consumed;
+    unsigned char frame[N];
 } shm;
+
+void fill_array(unsigned char* arr, unsigned char val)
+{
+    fprintf(stderr, "p1 : Filling array with value %d\n", val);
+    for(int i = 0; i < N; i++)
+    {
+        arr[i] = val;
+    }
+    fprintf(stderr, "p1 : Filled array with value %d\n", val);
+}
 
 int main()
 {
@@ -61,21 +74,29 @@ int main()
         fprintf(stderr, "p1 : pthread_mutex_init\n");
         return 1;
     }
-    shared_memory->cnt = 0;
+    shared_memory->error = 0;
+    shared_memory->consumed = 0;
+    unsigned char arr_val = 0;
+    fill_array(shared_memory->frame, arr_val);
 
-    fprintf(stderr, "p1 : Initial counter is %d\n", shared_memory->cnt);
     int i = -1;
     while(++i < 1000)
     {
-        if(pthread_mutex_lock(&shared_memory->mtx) != 0) { fprintf(stderr, "p1 : Error locking mutex (loop)\n"); }
-        shared_memory->cnt += 1;
-        fprintf(stderr, "p1 : Counter is %d\n", shared_memory->cnt);
-        if(pthread_mutex_unlock(&shared_memory->mtx) != 0) { fprintf(stderr, "p1 : Error unlocking mutex (loop)\n"); }
-        usleep(100000);
+        arr_val = (arr_val + 1) % 255;
+        if(pthread_mutex_lock(&shared_memory->mtx) != 0)
+        {
+            fprintf(stderr, "p1 : Error locking mutex\n");
+            continue;
+        }
+        fill_array(shared_memory->frame, arr_val);
+        shared_memory->consumed = 0;
+        if(pthread_mutex_unlock(&shared_memory->mtx) != 0)
+        {
+            fprintf(stderr, "p1 : Error unlocking mutex\n");
+            continue;
+        }
+        usleep(30000);
     }
-    if(pthread_mutex_lock(&shared_memory->mtx) != 0) { fprintf(stderr, "p1 : Error locking mutex\n"); }
-    fprintf(stderr, "p1 : Final counter is %d\n", shared_memory->cnt);
-    if(pthread_mutex_unlock(&shared_memory->mtx) != 0) { fprintf(stderr, "p1 : Error unlocking mutex\n"); }
 
     int un_ret = shm_unlink(NAME);
 
