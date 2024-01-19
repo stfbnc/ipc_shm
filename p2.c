@@ -8,7 +8,7 @@
 #include <pthread.h>
 
 #define NAME "/cpshm"
-#define N 1000
+#define N 1000000000
 
 typedef struct shm
 {
@@ -17,6 +17,8 @@ typedef struct shm
     int consumed;
     unsigned char frame[N];
 } shm;
+
+shm* shared_memory;
 
 int check_arr_vals(unsigned char* arr, unsigned char* val)
 {
@@ -34,7 +36,7 @@ int check_arr_vals(unsigned char* arr, unsigned char* val)
     return ret;
 }
 
-int main()
+int init()
 {
     int fd = shm_open(NAME, O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
     if(fd == -1)
@@ -49,7 +51,7 @@ int main()
         return 1;
     }
 
-    shm* shared_memory = (shm*)mmap(NULL, sizeof(shm), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    shared_memory = (shm*)mmap(NULL, sizeof(shm), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if((void*)shared_memory == MAP_FAILED)
     {
 		fprintf(stderr, "p2 : mmap(%s, %zu): %s (%d)\n", NAME, sizeof(shm), strerror(errno), errno);
@@ -58,6 +60,11 @@ int main()
 
 	close(fd);
 
+    return 0;
+}
+
+void read_shm()
+{
     unsigned char old_val = 200;
     int i = -1;
     while(++i < 1000)
@@ -124,6 +131,17 @@ int main()
 
         usleep(20000);
     }
+}
+
+int main()
+{
+    if(init() != 0)
+    {
+        fprintf(stderr, "p2 : init error\n");
+        return 1;
+    }
+
+    read_shm();
 
     return 0;
 }

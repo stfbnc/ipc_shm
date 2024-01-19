@@ -8,7 +8,7 @@
 #include <pthread.h>
 
 #define NAME "/cpshm"
-#define N 1000
+#define N 1000000000
 
 typedef struct shm
 {
@@ -17,6 +17,8 @@ typedef struct shm
     int consumed;
     unsigned char frame[N];
 } shm;
+
+shm* shared_memory;
 
 void fill_array(unsigned char* arr, unsigned char val)
 {
@@ -28,7 +30,7 @@ void fill_array(unsigned char* arr, unsigned char val)
     fprintf(stderr, "p1 : Filled array with value %d\n", val);
 }
 
-int main()
+int init()
 {
     int fd = shm_open(NAME, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
     if(fd == -1)
@@ -43,7 +45,7 @@ int main()
         return 1;
     }
 
-    shm* shared_memory = (shm*)mmap(NULL, sizeof(shm), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    shared_memory = (shm*)mmap(NULL, sizeof(shm), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if((void*)shared_memory == MAP_FAILED)
     {
 		fprintf(stderr, "p1 : mmap(%s, %zu): %s (%d)\n", NAME, sizeof(shm), strerror(errno), errno);
@@ -76,9 +78,14 @@ int main()
     }
     shared_memory->error = 0;
     shared_memory->consumed = 0;
-    unsigned char arr_val = 0;
-    fill_array(shared_memory->frame, arr_val);
+    fill_array(shared_memory->frame, 0);
 
+    return 0;
+}
+
+void* fill_shm(void* param)
+{
+    unsigned char arr_val = 0;
     int i = -1;
     while(++i < 1000)
     {
@@ -96,6 +103,32 @@ int main()
             continue;
         }
         usleep(30000);
+    }
+
+    return NULL;
+}
+
+int main()
+{
+    if(init() != 0)
+    {
+        fprintf(stderr, "p1 : init error\n");
+        return 1;
+    }
+
+    pthread_t thread_id;
+    int ret = pthread_create(&thread_id, NULL, &fill_shm, NULL);
+    if(ret != 0)
+    {
+        fprintf(stderr, "p1 : pthread_create error\n");
+        return 1;
+    }
+
+    ret = pthread_join(thread_id, NULL);
+    if(ret != 0)
+    {
+        fprintf(stderr, "p1 : pthread_join error\n");
+        return 1;
     }
 
     int un_ret = shm_unlink(NAME);
